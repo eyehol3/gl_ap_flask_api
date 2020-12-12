@@ -2,21 +2,17 @@ import os
 
 from sqlalchemy import orm, UniqueConstraint
 from sqlalchemy.orm import sessionmaker, scoped_session
-from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
-
+import app
 from sqlalchemy import (
     Column, Integer, ForeignKey, String,
 )
 
-DB_URI = os.getenv("DB_URI", "postgres://postgres:dagger@localhost:5432/postgres")
-engine = create_engine(DB_URI)
-SessionFactory = sessionmaker(bind=engine)
-Session = scoped_session(SessionFactory)
-
-BaseModel = declarative_base()
 
 
+# BaseModel = declarative_base()
+
+BaseModel = app.db.Model
 class Users(BaseModel):
     __tablename__ = "users"
 
@@ -49,3 +45,4 @@ class Invited_users(BaseModel):
 
 
 
+# app.db.create_all()

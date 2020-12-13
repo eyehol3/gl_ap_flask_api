@@ -5,13 +5,13 @@ class Credentials(Schema):
     password = fields.String()
 
 class UserData(Schema):
-    id = fields.Integer()
+    uid = fields.Integer()
     name = fields.String()
 
 class EventData(Schema):
-    id = fields.Integer()
+    uid = fields.Integer()
     name = fields.String()
-    date = fields.DateTime()
+    datetime = fields.DateTime()
     description = fields.String()
     created_by = fields.Nested(UserData())
 

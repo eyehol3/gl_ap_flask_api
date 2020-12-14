@@ -16,8 +16,10 @@ from sqlalchemy import (
 class Users(app.db.Model):
     __tablename__ = "users"
 
-    uid = Column(Integer, primary_key=True)
-    name = Column(String)
+    uid = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String, )
+
+    UniqueConstraint(name)
 
     def __init__(self, name, uid=None):
         self.name = name
@@ -25,7 +27,7 @@ class Users(app.db.Model):
 class Events(app.db.Model):
     __tablename__ = "events"
 
-    uid = Column(Integer, primary_key=True)
+    uid = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String)
     datetime = Column(DateTime, default=datetime.datetime.now)
     description = Column(String)

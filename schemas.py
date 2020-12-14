@@ -16,7 +16,8 @@ class EventData(Schema):
     name = fields.String()
     datetime = fields.DateTime()
     description = fields.String()
-    created_by = fields.Nested(UserData())
+    owner = fields.Nested(UserData())
+    owner_id = fields.Integer()
     invited_users = fields.List(fields.Integer)
 
     @post_load

@@ -28,12 +28,13 @@ def getEventById(e_id):
     else:
         return "event not found", 400
 
-def handleEventRequest(request, e_id):
+def handleEventRequest(request, e_id=None):
     data = request.get_json()
     try:
         event = EventData().load(data)
         event.datetime = datetime.datetime.now()
-        event.uid = e_id
+        if e_id:
+            event.uid = e_id
     except ValidationError as e:
             print(e)
             return 'invalid input, object invalid', 400
@@ -66,17 +67,17 @@ def deleteInvitedUsers(e_id=None, invited_user=None):
     except Exception as e:
         print(e)
 
-@api_blueprint.route("/events/<e_id>", methods=["POST"])
-def addEvent(e_id):
-    if bool(Events.query.filter(Events.uid == e_id).first()):
-        return "this event already exists", 409
-    else:
+@api_blueprint.route("/events", methods=["POST"])
+def addEvent():
+    # if bool(Events.query.filter(Events.uid == e_id).first()):
+        # return "this event already exists", 409
+    # else:
         
-        event, invited_users = handleEventRequest(request, e_id)
+        event, invited_users = handleEventRequest(request)
         print(event, "DLSKFJLDSKFJ:DLSKFJD:SFKJ")
         db.session.add(event)
         db.session.commit()
-        addInvitedUsers(e_id, invited_users)
+        addInvitedUsers(e_id=event.uid, invited_users=invited_users)
         return "event created", 201
 
 @api_blueprint.route("/events/<e_id>", methods=["DELETE"])
@@ -96,9 +97,11 @@ def editEvent(e_id):
         return "this event does not exist", 409
     else:
         event = Events.query.filter(Events.uid == e_id).first()
-        event, invited_users = handleEventRequest(request, e_id)
+        newevent, invited_users = handleEventRequest(request, e_id)
+        event.name = newevent.name
+        event.description = newevent.description
         db.session.commit()
-        deleteInvitedUsers(e_id, invited_users)
+        deleteInvitedUsers(e_id=e_id)
         addInvitedUsers(e_id, invited_users)
         return "event updated"
 

@@ -56,4 +56,5 @@ class Invited_users(app.db.Model):
     invited_user = orm.relationship(Users, backref="users", lazy="joined")
     
     __table_args__ = (PrimaryKeyConstraint(event_id, invited_user_uid),)
+# app.db.drop_all()
 app.db.create_all()

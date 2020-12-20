@@ -1,9 +1,11 @@
 from flask import Blueprint, jsonify, request
-from app import db
+from app import db, app
 from pprint import pformat, pprint
 from models import Users, Events, Invited_users
 from marshmallow import ValidationError
 import datetime
+from flask_jwt import JWT, jwt_required, current_identity
+
 from schemas import (
     Credentials,
     UserData,
@@ -13,7 +15,21 @@ from schemas import (
 logged_in_user = Users.query.get(2)
 print(logged_in_user.uid)
 api_blueprint = Blueprint('api', __name__)
+# https://pythonhosted.org/Flask-JWT/
+def authenticate(username, password):
+    user = Users.query.filter(Users.username == username).scalar()
+    # if bcrypt.check_password_hash(user.password, password):
+    if user.password == password:
+        return user
 
+def identity(payload):
+    return Users.query.filter(Users.uid == payload['identity']).scalar()
+
+jwt = JWT(app, authenticate, identity)
+@app.route('/protected')
+@jwt_required()
+def protected():
+    return '%s' % current_identity
 
 def handleEventRequest(request, e_id=None):
     data = request.get_json()

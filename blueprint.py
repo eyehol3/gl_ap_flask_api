@@ -10,14 +10,77 @@ from schemas import (
     EventData
 )
 
+logged_in_user = Users.query.get(2)
+print(logged_in_user.uid)
 api_blueprint = Blueprint('api', __name__)
+
+
+def handleEventRequest(request, e_id=None):
+    data = request.get_json()
+    try:
+        event = EventData().load(data)
+        event.datetime = datetime.datetime.now()
+        if e_id:
+            event.uid = e_id
+    except ValidationError as e:
+        print(e)
+        return 'invalid input, object invalid', 400
+    # pprint(data)
+    if data["invited_users"]:
+        invited_users = data["invited_users"]
+    else:
+        invited_users = None
+    return event, invited_users
+
+
+def addInvitedUsers(e_id, invited_users):
+    if not invited_users:
+        return
+    for u_id in invited_users:
+        db.session.add(Invited_users(event_id=e_id, invited_user_uid=u_id))
+    try:
+        db.session.commit()
+    except Exception as e:
+        print(e)
+
+
+def deleteInvitedUsers(e_id=None, invited_user=None):
+    invited_rel = []
+    if e_id:
+        invited_rel += Invited_users.query.filter(
+            Invited_users.event_id == e_id).all()
+    if invited_user:
+        invited_rel += Invited_users.query.filter(
+            Invited_users.invited_user_uid == invited_user).all()
+    # print(invited_rel)
+    for r in invited_rel:
+        db.session.delete(r)
+    try:
+        db.session.commit()
+    except Exception as e:
+        print(e)
+
 
 @api_blueprint.route("/events", methods=["GET"])
 def show_events():
-    events = [e for e in Events.query.all()]
+    # events = [e for e in Events.query.join(Invited_users)
+    # .filter((Events.owner_uid == logged_in_user.uid) | (Invited_users.invited_user_uid == logged_in_user.uid))]
+    events = [e for e in Events.query.outerjoin(Invited_users)
+    .filter((Events.owner_uid == logged_in_user.uid) | (Invited_users.invited_user_uid == logged_in_user.uid))]
     schema = UserData(many=True)
     result = schema.dump(events)
     return pformat(result)
+
+
+@api_blueprint.route("/events", methods=["POST"])
+def addEvent():
+    event, invited_users = handleEventRequest(request)
+    event.owner_uid = logged_in_user.uid
+    db.session.add(event)
+    db.session.commit()
+    addInvitedUsers(e_id=event.uid, invited_users=invited_users)
+    return "event created", 201
+
 
 @api_blueprint.route("/events/<e_id>", methods=["GET"])
 def getEventById(e_id):
@@ -28,57 +91,6 @@ def getEventById(e_id):
     else:
         return "event not found", 400
 
-def handleEventRequest(request, e_id=None):
-    data = request.get_json()
-    try:
-        event = EventData().load(data)
-        event.datetime = datetime.datetime.now()
-        if e_id:
-            event.uid = e_id
-    except ValidationError as e:
-            print(e)
-            return 'invalid input, object invalid', 400
-    # pprint(data)
-    if data["invited_users"]:
-        invited_users = data["invited_users"]
-    else:
-        invited_users = None 
-    return event, invited_users
-
-def addInvitedUsers(e_id, invited_users):
-    for u_id in invited_users:
-        db.session.add(Invited_users(event_id=e_id, invited_user_uid=u_id))
-    try:
-        db.session.commit()
-    except Exception as e:
-        print(e)
-
-def deleteInvitedUsers(e_id=None, invited_user=None):
-    invited_rel = []
-    if e_id:
-        invited_rel += Invited_users.query.filter(Invited_users.event_id == e_id).all()
-    if invited_user:
-        invited_rel += Invited_users.query.filter(Invited_users.invited_user_uid == invited_user).all()
-    # print(invited_rel)
-    for r in invited_rel:
-        db.session.delete(r)
-    try:
-        db.session.commit()
-    except Exception as e:
-        print(e)
-
-@api_blueprint.route("/events", methods=["POST"])
-def addEvent():
-    # if bool(Events.query.filter(Events.uid == e_id).first()):
-        # return "this event already exists", 409
-    # else:
-        
-        event, invited_users = handleEventRequest(request)
-        print(event, "DLSKFJLDSKFJ:DLSKFJD:SFKJ")
-        db.session.add(event)
-        db.session.commit()
-        addInvitedUsers(e_id=event.uid, invited_users=invited_users)
-        return "event created", 201
 
 @api_blueprint.route("/events/<e_id>", methods=["DELETE"])
 def deleteEventById(e_id):
@@ -90,6 +102,7 @@ def deleteEventById(e_id):
         db.session.delete(event)
         db.session.commit()
         return "event deleted"
+
 
 @api_blueprint.route("/events/<e_id>", methods=["PUT"])
 def editEvent(e_id):
@@ -105,10 +118,15 @@ def editEvent(e_id):
         addInvitedUsers(e_id, invited_users)
         return "event updated"
 
-def login(l,p):
+
+def login(l, p):
     return True
+
+
 def logout():
     return True
+
+
 @api_blueprint.route("/user", methods=["POST"])
 def createUser():
     username = request.args.get('username')
@@ -116,10 +134,10 @@ def createUser():
     if bool(Users.query.filter(Users.name == username).first()):
         return "user already exists", 409
     try:
-        cred = Credentials().load({"username":username, "password": password})
+        cred = Credentials().load({"username": username, "password": password})
     except ValidationError:
         return 'invalid input', 400
-    db.session.add(Users(name=username))
+    db.session.add(Users(name=username, password=password))
     db.session.commit()
     login(username, password)
     return f"user {username} has been created"
@@ -132,7 +150,7 @@ def loginUser():
     if not bool(Users.query.filter(Users.name == username).first()):
         return "user does not exist", 409
     try:
-        cred = Credentials().load({"username":username, "password": password})
+        cred = Credentials().load({"username": username, "password": password})
     except ValidationError:
         return 'invalid input', 400
     if login(username, password):
@@ -140,10 +158,12 @@ def loginUser():
     else:
         return "Invalid username/password supplied"
 
+
 @api_blueprint.route("/user/logout", methods=["GET"])
 def logoutUser():
     logout()
     return "logged out"
+
 
 @api_blueprint.route("/user/<username>", methods=["GET"])
 def getUserByUsername(username):
@@ -153,6 +173,7 @@ def getUserByUsername(username):
         return pformat(result)
     else:
         return "user not found", 404
+
 
 @api_blueprint.route("/user/<username>", methods=["PUT"])
 def updateUser(username):
@@ -168,6 +189,7 @@ def updateUser(username):
     except ValidationError as e:
         print(e)
         return 'invalid input supplied', 400
+
 
 @api_blueprint.route("/user/<username>", methods=["DELETE"])
 def deleteUser(username):

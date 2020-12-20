@@ -11,3 +11,4 @@ alembic
 marshmallow
 flask_sqlalchemy
 sqlalchemy-utils
+Flask-JWT

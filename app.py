@@ -4,9 +4,10 @@ import datetime
 DB_URI = "postgres://postgres:123456@localhost:5432/flask_api"
 app = Flask(__name__)
 app.config["DEBUG"] = True
-# app.config["SQLALCHEMY_ECHO"] = True
+app.config["SQLALCHEMY_ECHO"] = True
 app.config['SQLALCHEMY_DATABASE_URI'] = DB_URI
 db = SQLAlchemy(app)
+
 
 if __name__ == "__main__":
 
@@ -29,11 +30,8 @@ if __name__ == "__main__":
     # db.create_all()
     # db.drop_all()
 
-    me = Users(uid=1, name='nstr')
-    # event1 = Events(uid=7, name="dsdsd", description='dddd', owner_uid=1, datetime=datetime.datetime.now())
-    # db.session.add(me)
-    # db.session.add(event1)
-    # print("adding event 1")
-    # db.session.commit()
+    # me = Users(uid=1, name='nstr')
+    
+
     app.register_blueprint(blueprint.api_blueprint)
     app.run()

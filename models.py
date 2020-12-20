@@ -18,11 +18,12 @@ class Users(app.db.Model):
 
     uid = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String, )
-
+    password = Column(String)
     UniqueConstraint(name)
 
-    def __init__(self, name, uid=None):
+    def __init__(self, name, password, uid=None):
         self.name = name
+        self.password = password
         self.uid = uid
 class Events(app.db.Model):
     __tablename__ = "events"

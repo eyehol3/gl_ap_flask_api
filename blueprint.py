@@ -98,6 +98,7 @@ def addEvent():
 
 
 @app.route("/events/<e_id>", methods=["GET"])
+@jwt_required
 def getEventById(e_id):
     event = Events.query.filter(Events.uid == e_id).first()
     if event:
@@ -171,10 +172,9 @@ def logoutUser():
     return "logged out"
 
 
-@app.route("/user", methods=["GET"])
-def getUserByUsername():
-    user_id = get_jwt_identity()
-    user = Users.query.filter(Users.uid == user_id).first()
+@app.route("/user/<username>", methods=["GET"])
+def getUserByUsername(username):
+    user = Users.query.filter(Users.name == username).first()
     if user:
         result = UserData().dump(user)
         return pformat(result)

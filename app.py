@@ -1,37 +1,36 @@
 from flask import Flask
+from flask_script import Manager
 from flask_sqlalchemy import SQLAlchemy
-import datetime
-DB_URI = "postgres://postgres:123456@localhost:5432/flask_api"
+from flask_migrate import Migrate, MigrateCommand
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from flask_jwt_extended import JWTManager
+
 app = Flask(__name__)
-app.config["DEBUG"] = True
-app.config["SQLALCHEMY_ECHO"] = True
+jwt = JWTManager(app)
+app.debug = True
+DB_URI = "postgres://postgres:postgres@localhost:5432/postgres"
+app.config['JWT_SECRET_KEY'] = '2F4A8B8690219C1841B865EB87E8EC40281F7784BA16AEF0408DC712A6F3B4D3'
 app.config['SQLALCHEMY_DATABASE_URI'] = DB_URI
+
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+manager = Manager(app)
 db = SQLAlchemy(app)
+migrate = Migrate(app, db)
+manager.add_command('db', MigrateCommand)
 
+engine = create_engine(app.config['SQLALCHEMY_DATABASE_URI'])
 
-if __name__ == "__main__":
+SessionFactory = sessionmaker(bind=engine)
 
-    from sqlalchemy_utils import create_database, database_exists
-    from models import Users, Events, Invited_users
-    import blueprint
+BaseModel = declarative_base()
 
-    if not database_exists(DB_URI):
-        create_database(DB_URI)
+if __name__ == '__main__':
 
-    @app.route('/api/v1/hello-world-10')
-    def hello_world():
-        return 'Hello, World 10'
+    from models import *
+    from schemas import *
+    from blueprint import *
 
-    @app.route('/')
-    def index():
-        return "fslkdjf;laskjf;l"
-
-    # db.drop_all()
-    # db.create_all()
-    # db.drop_all()
-
-    # me = Users(uid=1, name='nstr')
-    
-
-    app.register_blueprint(blueprint.api_blueprint)
+    db.create_all()
     app.run()

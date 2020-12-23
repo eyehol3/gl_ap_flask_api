@@ -1,18 +1,17 @@
-import os
 import datetime
+import bcrypt
 from sqlalchemy import orm, UniqueConstraint, PrimaryKeyConstraint
-from sqlalchemy.orm import sessionmaker, scoped_session
-from sqlalchemy.ext.declarative import declarative_base
+from flask_jwt_extended import create_access_token
+from datetime import timedelta
+
 import app
 from sqlalchemy import (
     Column, Integer, ForeignKey, String, DateTime
 )
 
+BaseModel = app.db.Model
 
 
-# app.db.Model = declarative_base()
-
-# BaseModel = app.db.Model
 class Users(app.db.Model):
     __tablename__ = "users"
 
@@ -25,6 +24,21 @@ class Users(app.db.Model):
         self.name = name
         self.password = password
         self.uid = uid
+
+    def get_token(self, expire_time=24):
+        expire_delta = timedelta(expire_time)
+        token = create_access_token(
+            identity=self.uid, expires_delta=expire_delta)
+        return token
+
+    @classmethod
+    def authenticate(cls, name, password):
+        user = cls.query.filter(cls.name == name).one()
+        if not bcrypt.verify(password, user.password):
+            raise Exception('No user with this password')
+        return user
+
+
 class Events(app.db.Model):
     __tablename__ = "events"
 
@@ -55,7 +69,9 @@ class Invited_users(app.db.Model):
                   )
     event = orm.relationship(Events, backref="events", lazy="joined")
     invited_user = orm.relationship(Users, backref="users", lazy="joined")
-    
+
     __table_args__ = (PrimaryKeyConstraint(event_id, invited_user_uid),)
-# app.db.drop_all()
+
+
+
 app.db.create_all()

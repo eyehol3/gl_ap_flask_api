@@ -35,6 +35,28 @@ paths:
       security:
         - calendar_auth:
             - read:events
+
+    post:
+      tags:
+        - events
+      summary: adds event
+      operationId: addEvent
+      description: Adds an event to the system, can be done by logged in user
+
+      responses:
+        '201':
+          description: item created
+        '400':
+          description: 'invalid input, object invalid'
+        '409':
+          description: an existing item already exists
+      requestBody:
+        $ref: '#/components/requestBodies/Event'
+      security:
+        - calendar_auth:
+            - write:events
+            - read:events
+    
   '/events/{eventId}':
     get:
       tags:
@@ -91,34 +113,6 @@ paths:
             - write:events
             - read:events
 
-    
-    post:
-      tags:
-        - events
-      summary: adds event
-      operationId: addEvent
-      description: Adds an event to the system, can be done by logged in user
-      parameters:
-        - name: eventId
-          in: path
-          description: ID of event to return
-          required: true
-          schema:
-            type: integer
-            format: int64
-      responses:
-        '201':
-          description: item created
-        '400':
-          description: 'invalid input, object invalid'
-        '409':
-          description: an existing item already exists
-      requestBody:
-        $ref: '#/components/requestBodies/Event'
-      security:
-        - calendar_auth:
-            - write:events
-            - read:events
     delete:
       tags:
         - events
@@ -277,16 +271,10 @@ components:
   schemas:
     Event:
       type: object
-      required:
-        - id
-        - name
-        - date
-        - description
       properties:
         id:
-          type: string
-          format: uuid
-          example: d290f1ee-6c54-4b01-90e6-d701748f0851
+          type: integer
+          example: 1
         name:
           type: string
           example: my birthday
@@ -311,9 +299,8 @@ components:
           type: string
           example: Nestor Ivaniushenko
         uid:
-          type: string
-          format: uuid
-          example: fklsadj-asdjf-wfnf-8a0fi
+          type: integer
+          example: 1
       type: object
       
   requestBodies:

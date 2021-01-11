@@ -1,10 +1,14 @@
-from flask import Blueprint, jsonify, request
+from flask import jsonify, request
 from app import db, app
-from pprint import pformat, pprint
+from pprint import pformat
 from models import Users, Events, Invited_users
 from marshmallow import ValidationError
 import datetime
-from flask_jwt import JWT, jwt_required, current_identity
+import hashlib
+from flask_jwt import current_identity
+from flask_jwt_extended import (
+     jwt_required, create_access_token, get_jwt_identity
+)
 
 from schemas import (
     Credentials,
@@ -12,24 +16,21 @@ from schemas import (
     EventData
 )
 
-logged_in_user = Users.query.get(2)
-print(logged_in_user.uid)
-api_blueprint = Blueprint('api', __name__)
-# https://pythonhosted.org/Flask-JWT/
-def authenticate(username, password):
-    user = Users.query.filter(Users.username == username).scalar()
-    # if bcrypt.check_password_hash(user.password, password):
-    if user.password == password:
-        return user
 
-def identity(payload):
-    return Users.query.filter(Users.uid == payload['identity']).scalar()
+def get_current_user():
+    return Users.query.filter_by(name=get_jwt_identity()).first()
 
-jwt = JWT(app, authenticate, identity)
+
+@app.route('/logout', methods=['GET'])
+def logout():
+    return jsonify({"msg": "Successfully, you have logged out"}), 200
+
+
 @app.route('/protected')
-@jwt_required()
+@jwt_required
 def protected():
     return '%s' % current_identity
+
 
 def handleEventRequest(request, e_id=None):
     data = request.get_json()
@@ -41,7 +42,6 @@ def handleEventRequest(request, e_id=None):
     except ValidationError as e:
         print(e)
         return 'invalid input, object invalid', 400
-    # pprint(data)
     if data["invited_users"]:
         invited_users = data["invited_users"]
     else:
@@ -68,7 +68,6 @@ def deleteInvitedUsers(e_id=None, invited_user=None):
     if invited_user:
         invited_rel += Invited_users.query.filter(
             Invited_users.invited_user_uid == invited_user).all()
-    # print(invited_rel)
     for r in invited_rel:
         db.session.delete(r)
     try:
@@ -77,28 +76,29 @@ def deleteInvitedUsers(e_id=None, invited_user=None):
         print(e)
 
 
-@api_blueprint.route("/events", methods=["GET"])
+@app.route("/events", methods=["GET"])
+@jwt_required
 def show_events():
-    # events = [e for e in Events.query.join(Invited_users)
-    # .filter((Events.owner_uid == logged_in_user.uid) | (Invited_users.invited_user_uid == logged_in_user.uid))]
     events = [e for e in Events.query.outerjoin(Invited_users)
-    .filter((Events.owner_uid == logged_in_user.uid) | (Invited_users.invited_user_uid == logged_in_user.uid))]
+        .filter((Events.owner_uid == get_current_user().uid) | (Invited_users.invited_user_uid == get_current_user().uid))]
     schema = UserData(many=True)
     result = schema.dump(events)
     return pformat(result)
 
 
-@api_blueprint.route("/events", methods=["POST"])
+@app.route("/events", methods=["POST"], endpoint='addEvent')
+@jwt_required
 def addEvent():
     event, invited_users = handleEventRequest(request)
-    event.owner_uid = logged_in_user.uid
+    event.owner_uid = get_current_user().uid
     db.session.add(event)
     db.session.commit()
     addInvitedUsers(e_id=event.uid, invited_users=invited_users)
     return "event created", 201
 
 
-@api_blueprint.route("/events/<e_id>", methods=["GET"])
+@app.route("/events/<e_id>", methods=["GET"])
+@jwt_required
 def getEventById(e_id):
     event = Events.query.filter(Events.uid == e_id).first()
     if event:
@@ -108,7 +108,8 @@ def getEventById(e_id):
         return "event not found", 400
 
 
-@api_blueprint.route("/events/<e_id>", methods=["DELETE"])
+@app.route("/events/<e_id>", methods=["DELETE"])
+@jwt_required
 def deleteEventById(e_id):
     if not bool(Events.query.filter(Events.uid == e_id).first()):
         return "this event does not exist", 409
@@ -120,7 +121,8 @@ def deleteEventById(e_id):
         return "event deleted"
 
 
-@api_blueprint.route("/events/<e_id>", methods=["PUT"])
+@app.route("/events/<e_id>", methods=["PUT"])
+@jwt_required
 def editEvent(e_id):
     if not bool(Events.query.filter(Events.uid == e_id).first()):
         return "this event does not exist", 409
@@ -135,53 +137,42 @@ def editEvent(e_id):
         return "event updated"
 
 
-def login(l, p):
-    return True
-
-
-def logout():
-    return True
-
-
-@api_blueprint.route("/user", methods=["POST"])
+@app.route("/user", methods=["POST"])
 def createUser():
-    username = request.args.get('username')
-    password = request.args.get('password')
+    username = request.json.get('username', None)
+    password = request.json.get('password', None)
     if bool(Users.query.filter(Users.name == username).first()):
         return "user already exists", 409
     try:
         cred = Credentials().load({"username": username, "password": password})
     except ValidationError:
         return 'invalid input', 400
-    db.session.add(Users(name=username, password=password))
+    db.session.add(Users(name=username, password=hashlib.md5(password.encode()).hexdigest()))
     db.session.commit()
-    login(username, password)
-    return f"user {username} has been created"
+    return f"user {username} has been created with password : {hashlib.md5(password.encode()).hexdigest()}"
 
 
-@api_blueprint.route("/user/login", methods=["GET"])
-def loginUser():
-    username = request.args.get('username')
-    password = request.args.get('password')
-    if not bool(Users.query.filter(Users.name == username).first()):
-        return "user does not exist", 409
-    try:
-        cred = Credentials().load({"username": username, "password": password})
-    except ValidationError:
-        return 'invalid input', 400
-    if login(username, password):
-        return f"succsessfully logged in"
+@app.route('/login', methods=['POST'])
+def login():
+    username = request.json.get('username', None)
+    password = request.json.get('password', None)
+    current_user = Users.query.filter_by(name=username)
+    if current_user is None:
+        return jsonify({"msg": "Not Found"}), 404
+    for i in current_user:
+        if i.password == password:
+            return jsonify(access_token=create_access_token(identity=username)), 200
     else:
-        return "Invalid username/password supplied"
+        return jsonify({"Error": "Wrong password"}), 401
 
 
-@api_blueprint.route("/user/logout", methods=["GET"])
+@app.route("/user/logout", methods=["GET"])
 def logoutUser():
     logout()
     return "logged out"
 
 
-@api_blueprint.route("/user/<username>", methods=["GET"])
+@app.route("/user/<username>", methods=["GET"])
 def getUserByUsername(username):
     user = Users.query.filter(Users.name == username).first()
     if user:
@@ -191,7 +182,8 @@ def getUserByUsername(username):
         return "user not found", 404
 
 
-@api_blueprint.route("/user/<username>", methods=["PUT"])
+@app.route("/user/<username>", methods=["PUT"])
+@jwt_required
 def updateUser(username):
     user = Users.query.filter(Users.name == username).first()
     data = request.get_json()
@@ -207,12 +199,11 @@ def updateUser(username):
         return 'invalid input supplied', 400
 
 
-@api_blueprint.route("/user/<username>", methods=["DELETE"])
+@app.route("/user/<username>", methods=["DELETE"])
+@jwt_required
 def deleteUser(username):
     user = Users.query.filter(Users.name == username).first()
     if user:
-        # result = UserData().dump(user)
-        # pprint(result)
         deleteInvitedUsers(invited_user=user.uid)
         db.session.delete(user)
         db.session.commit()
